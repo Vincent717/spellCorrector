@@ -1,3 +1,224 @@
+
+%%%%%%%%%
+% filter out the known word from a list of words
+% R : (list) a list of lists, while sublist contains the word and its probability
+
+known([],[]).
+known([H|T],R) :- 
+				(  remember(H,P) 
+				-> append(SR,[[H,P]],R),
+				   known(T,SR)
+                ;  known(T,R)
+                ).
+
+
+
+%%%%%%%%%
+% edits in distance 1
+% word   : (term) target word
+% Ewords : (list) result
+
+edits1(Word,Ewords) :- 
+					splits(Word,0,[],Spl),
+					deletes(Spl,[],Del),
+					transposes(Spl,[],Tra),
+					replaces(Spl,[],Rep),
+					inserts(Spl,[],Ins),
+					myAppend([Del,Tra,Rep,Ins],[],Ewords).
+
+
+%%%%%%%%%%
+% edit 2 times
+
+edits2(Word,E2words) :-
+					edits1(Word,E1words),
+					multiEdits1(E1words,[],E2words).
+
+multiEdits1([],A,A).
+multiEdits1([H|T],Acc,E1words) :- 
+							edits1(H,Ewds),
+							append(Ewds,Acc,R),
+							multiEdits1(T,R,E1words).
+
+
+
+
+
+%%%%%%%%%
+% splits a word in all the combinations
+% Word: (term) the target word
+% I   : (Int)  the index to cut
+% Acc : (list) the accumulater
+% Spl : (list) the result
+% e.g., 
+% input: splits('the',0,[],W). 
+% output: W = [["", "the"], ["t", "he"], ["th", "e"], [the, '']] 
+
+splits(Word,I,Acc,Spl) :- 
+					string_length(Word,Len),
+					(  I < Len
+					-> sub_string(Word,0,I,_,L),
+					   sub_string(Word,I,_,0,R),
+					   append(Acc,[[L,R]],Tmp),
+					   NewI is I + 1,
+					   splits(Word,NewI,Tmp,Spl)
+					;  append(Acc, [[Word,'']], Spl)
+					).
+
+
+
+%%%%%%%%%%
+% deletes the first character in the right part
+% 1st param : (list) target splits
+% 2nd param : (list) accumulater
+% 3rd param : (list) a list of results
+
+deletes([],A,A).
+deletes([[H,T]|WT],Acc,R) :- 
+							(  T \= ''
+							-> sub_string(T,1,_,0,Tmp),
+							   string_concat(H,Tmp,RH),
+							   append([RH],Acc,Acc2),
+							   deletes(WT,Acc2,R)
+							;  deletes(WT,Acc,R)
+							).
+
+
+%%%%%%%%
+% transposes two position
+
+transposes([],A,A).
+transposes([[H,T]|WT],Acc,R) :-
+								string_length(T,Len),
+								(  Len > 1
+								-> sub_string(T,0,1,_,FstChar),
+								   sub_string(T,1,1,_,SndChar),
+								   sub_string(T,2,_,0,Rest),
+								   multiConcat([H,SndChar,FstChar,Rest],'',RH),
+								   append([RH], Acc, Acc2),
+								   transposes(WT,Acc2,R)
+								;  transposes(WT,Acc,R)
+								).
+
+
+%%%%%%%%%%%
+% add each letter to the right part of a split
+% L, R: (list) list of characters, indicates the left and right part of a split
+% I   : (Int)  index of letters, e.g., 0 for a, 1 for b
+% Acc : (list) accumulater
+% AffterAdds : (list) a list of result, normally has 26 elements
+
+addLetter(L,R,I,Acc,AfterAdds) :-
+								I < 26, 
+								getLetter(I,Letter),
+								multiConcat([L,Letter,R],'',NewWord),
+								append(Acc,[NewWord],Tmp),
+								NewI is I + 1,
+								addLetter(L,R,NewI,Tmp,AfterAdds).
+addLetter(_,_,26,Acc,Acc).
+
+
+
+%%%%%%%%%%
+% replaces the first character in the right part
+
+replaces([],A,A).
+replaces([[H,T]|WT],Acc,R) :-
+							string_length(T,Len),
+							(  Len > 0
+							-> sub_string(T,1,_,0,Rest),
+							   addLetter(H,Rest,0,[],AfterAdds),
+							   append(Acc,AfterAdds,Tmp),
+							   replaces(WT,Tmp,R)
+							;  replaces(WT,Acc,R)
+							).
+
+
+
+%%%%%%%%%%
+% insert a letter to the first position of the right part
+
+inserts([],R,R).
+inserts([[H,T]|WT],Acc,R) :-
+							inserts(WT,Tmp,R),
+							addLetter(H,T,0,[],AfterAdds),
+							append(Acc,AfterAdds,Tmp).
+
+
+%%%%%%%%%%
+% find the candidates that are knownn
+
+candidate(Word,Candidate) :- 
+						known([Word],Kword),
+						length(Kword,LK),
+						(  LK > 0
+					    -> append(Kword, [], Candidate)
+						;  edits1(Word, E1words),
+						   known(E1words,KE1word),
+						   length(KE1word,LK1),
+						   (  LK1 > 0
+						   -> append(KE1word, [], Candidate)
+						   ;  edits2(Word, E2words),
+							  known(E2words,KE2word),
+						      append(KE2word, [], Candidate)
+						    )
+						).
+
+						
+
+%%%%%%%%%
+% find the correct word
+
+corrects(Word, Correct) :- 
+						candidate(Word,Candidate),
+						myMax(Candidate,[none,0],Correct).
+
+
+
+
+%%%%%%% some useful tool rules %%%%%%%%
+
+
+% concat the whole list of characters into a string
+% 1st parameter : (list)   a list of characters
+% 2nd parameter : (string) accumulater
+% 3rd parameter : (string) result
+
+multiConcat([],R,R).
+multiConcat([H|T],Acc,R) :- 
+						string_concat(Acc,H,Tmp),
+						multiConcat(T,Tmp,R).
+
+
+
+% append a list of lists into a whole list
+
+myAppend([],A,A).
+myAppend([H|T],A,R) :- 
+					myAppend(T,Q,R),
+					append(A,H,Q).
+
+
+
+% to see wheter the first list's second element is larger
+
+secondLarge([_,TF],[_,TS]) :- TF >= TS.
+
+
+% return the max in a list
+
+myMax([],A,A).
+myMax([H|T],A,Max) :- 
+					(  secondLarge(H,A)
+					-> myMax(T,H,Max)
+					;  myMax(T,A,Max)
+					).
+
+
+
+
+%%%%% below is the dictionary %%%%%%%
+
 remember("nunnery",0.000002).
 remember("woods",0.000062).
 remember("spiders",0.000002).
@@ -23292,218 +23513,3 @@ getLetter(24,'y').
 getLetter(25,'z').
 
 
-
-%%%%%%%%%
-% filter out the known word from a list of words
-% R : (list) a list of lists, while sublist contains the word and its probability
-
-known([],[]).
-known([H|T],R) :- 
-				(  remember(H,P) 
-				-> append(SR,[[H,P]],R),
-				   known(T,SR)
-                ;  known(T,R)
-                ).
-
-
-
-%%%%%%%%%
-% edits in distance 1
-% word   : (term) target word
-% Ewords : (list) result
-
-edits1(Word,Ewords) :- 
-					splits(Word,0,[],Spl),
-					deletes(Spl,[],Del),
-					transposes(Spl,[],Tra),
-					replaces(Spl,[],Rep),
-					inserts(Spl,[],Ins),
-					myAppend([Del,Tra,Rep,Ins],[],Ewords).
-
-
-%%%%%%%%%%
-% edit 2 times
-
-edits2(Word,E2words) :-
-					edits1(Word,E1words),
-					multiEdits1(E1words,[],E2words).
-
-multiEdits1([],A,A).
-multiEdits1([H|T],Acc,E1words) :- 
-							edits1(H,Ewds),
-							append(Ewds,Acc,R),
-							multiEdits1(T,R,E1words).
-
-
-
-
-
-%%%%%%%%%
-% splits a word in all the combinations
-% Word: (term) the target word
-% I   : (Int)  the index to cut
-% Acc : (list) the accumulater
-% Spl : (list) the result
-% e.g., 
-% input: splits('the',0,[],W). 
-% output: W = [["", "the"], ["t", "he"], ["th", "e"], [the, '']] 
-
-splits(Word,I,Acc,Spl) :- 
-					string_length(Word,Len),
-					(  I < Len
-					-> sub_string(Word,0,I,_,L),
-					   sub_string(Word,I,_,0,R),
-					   append(Acc,[[L,R]],Tmp),
-					   NewI is I + 1,
-					   splits(Word,NewI,Tmp,Spl)
-					;  append(Acc, [[Word,'']], Spl)
-					).
-
-
-
-%%%%%%%%%%
-% deletes the first character in the right part
-% 1st param : (list) target splits
-% 2nd param : (list) accumulater
-% 3rd param : (list) a list of results
-
-deletes([],A,A).
-deletes([[H,T]|WT],Acc,R) :- 
-							(  T \= ''
-							-> sub_string(T,1,_,0,Tmp),
-							   string_concat(H,Tmp,RH),
-							   append([RH],Acc,Acc2),
-							   deletes(WT,Acc2,R)
-							;  deletes(WT,Acc,R)
-							).
-
-
-%%%%%%%%
-% transposes two position
-
-transposes([],A,A).
-transposes([[H,T]|WT],Acc,R) :-
-								string_length(T,Len),
-								(  Len > 1
-								-> sub_string(T,0,1,_,FstChar),
-								   sub_string(T,1,1,_,SndChar),
-								   sub_string(T,2,_,0,Rest),
-								   multiConcat([H,SndChar,FstChar,Rest],'',RH),
-								   append([RH], Acc, Acc2),
-								   transposes(WT,Acc2,R)
-								;  transposes(WT,Acc,R)
-								).
-
-
-%%%%%%%%%%%
-% add each letter to the right part of a split
-% L, R: (list) list of characters, indicates the left and right part of a split
-% I   : (Int)  index of letters, e.g., 0 for a, 1 for b
-% Acc : (list) accumulater
-% AffterAdds : (list) a list of result, normally has 26 elements
-
-addLetter(L,R,I,Acc,AfterAdds) :-
-								I < 26, 
-								getLetter(I,Letter),
-								multiConcat([L,Letter,R],'',NewWord),
-								append(Acc,[NewWord],Tmp),
-								NewI is I + 1,
-								addLetter(L,R,NewI,Tmp,AfterAdds).
-addLetter(_,_,26,Acc,Acc).
-
-
-
-%%%%%%%%%%
-% replaces the first character in the right part
-
-replaces([],A,A).
-replaces([[H,T]|WT],Acc,R) :-
-							string_length(T,Len),
-							(  Len > 0
-							-> sub_string(T,1,_,0,Rest),
-							   addLetter(H,Rest,0,[],AfterAdds),
-							   append(Acc,AfterAdds,Tmp),
-							   replaces(WT,Tmp,R)
-							;  replaces(WT,Acc,R)
-							).
-
-
-
-%%%%%%%%%%
-% insert a letter to the first position of the right part
-
-inserts([],R,R).
-inserts([[H,T]|WT],Acc,R) :-
-							inserts(WT,Tmp,R),
-							addLetter(H,T,0,[],AfterAdds),
-							append(Acc,AfterAdds,Tmp).
-
-
-%%%%%%%%%%
-% find the candidates that are knownn
-
-candidate(Word,Candidate) :- 
-						known([Word],Kword),
-						length(Kword,LK),
-						(  LK > 0
-					    -> append(Kword, [], Candidate)
-						;  edits1(Word, E1words),
-						   known(E1words,KE1word),
-						   length(KE1word,LK1),
-						   (  LK1 > 0
-						   -> append(KE1word, [], Candidate)
-						   ;  edits2(Word, E2words),
-							  known(E2words,KE2word),
-						      append(KE2word, [], Candidate)
-						    )
-						).
-
-						
-
-%%%%%%%%%
-% find the correct word
-
-corrects(Word, Correct) :- 
-						candidate(Word,Candidate),
-						myMax(Candidate,[none,0],Correct).
-
-
-
-
-%%%%%%% some useful tool rules %%%%%%%%
-
-
-% concat the whole list of characters into a string
-% 1st parameter : (list)   a list of characters
-% 2nd parameter : (string) accumulater
-% 3rd parameter : (string) result
-
-multiConcat([],R,R).
-multiConcat([H|T],Acc,R) :- 
-						string_concat(Acc,H,Tmp),
-						multiConcat(T,Tmp,R).
-
-
-
-% append a list of lists into a whole list
-
-myAppend([],A,A).
-myAppend([H|T],A,R) :- 
-					myAppend(T,Q,R),
-					append(A,H,Q).
-
-
-
-% to see wheter the first list's second element is larger
-
-secondLarge([_,TF],[_,TS]) :- TF >= TS.
-
-
-% return the max in a list
-
-myMax([],A,A).
-myMax([H|T],A,Max) :- 
-					(  secondLarge(H,A)
-					-> myMax(T,H,Max)
-					;  myMax(T,A,Max)
-					).
