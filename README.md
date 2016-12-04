@@ -14,8 +14,8 @@ But implemented with Prolog.
 
 **Some Note**
 
-The first part of the code is the dictionary, you can implement your own.
+The first part is the main code, which is hard annotated.
 
-The second part is the main code, which is hard annotated.
+The second part of the code is the dictionary, you can implement your own.
 
 Have fun :)
