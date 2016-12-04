@@ -8,7 +8,7 @@ But implemented with Prolog.
 **To Run**
 
 1. consult spellCorrector.pl into swi-prolog version 7.0+
-+  run: corrects('tha',Result).
++  try to run: corrects('tha',Result).
 
 --------
 
