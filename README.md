@@ -18,4 +18,4 @@ The first part of the code is the dictionary, you can implement your own.
 
 The second part is the main code, which is hard annotated.
 
-Have fun. :)
+Have fun :)
